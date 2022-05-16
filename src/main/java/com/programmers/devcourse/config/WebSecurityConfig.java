@@ -22,20 +22,25 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
     @Override
     protected void configure(HttpSecurity http) throws Exception {
         http
-            .authorizeRequests()
+                .authorizeRequests()
                 .antMatchers("/me").hasAnyRole("USER", "ADMIN")
                 .anyRequest().permitAll()
                 .and()
-            .formLogin()
+                .formLogin()
                 .defaultSuccessUrl("/me")
                 .permitAll()
-                .and();
+                .and()
+                .rememberMe()
+                .tokenValiditySeconds(300)
+                .and()
+                .logout()
+                .logoutSuccessUrl("/");
     }
 
     @Override
     protected void configure(AuthenticationManagerBuilder auth) throws Exception {
         auth
-            .inMemoryAuthentication()
+                .inMemoryAuthentication()
                 .withUser("user").password("{noop}user123").roles("USER").and()
                 .withUser("admin").password("{noop}admin123").roles("ADMIN");
     }
