@@ -2,8 +2,11 @@ package com.programmers.devcourse.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.security.access.AccessDecisionManager;
 import org.springframework.security.access.AccessDecisionVoter;
 import org.springframework.security.access.AccessDeniedException;
@@ -18,6 +21,7 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
 import org.springframework.security.web.FilterInvocation;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.access.expression.WebExpressionVoter;
@@ -38,6 +42,21 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 new AuthenticationTrustResolverImpl(),
                 "ROLE_"
         );
+    }
+
+    @Bean
+    @Qualifier("myAsyncTaskExecutor")
+    public ThreadPoolTaskExecutor threadPoolTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(3);
+        executor.setMaxPoolSize(5);
+        executor.setThreadNamePrefix("my-executor-");
+        return executor;
+    }
+
+    @Bean
+    public DelegatingSecurityContextAsyncTaskExecutor taskExecutor(@Qualifier("myAsyncTaskExecutor") AsyncTaskExecutor delegate) {
+        return new DelegatingSecurityContextAsyncTaskExecutor(delegate);
     }
 
     @Bean
@@ -79,6 +98,8 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .formLogin()
                 .defaultSuccessUrl("/me")
                 .permitAll()
+                .and()
+                .httpBasic()
                 .and()
                 /**
                  * rememberMe 설정
