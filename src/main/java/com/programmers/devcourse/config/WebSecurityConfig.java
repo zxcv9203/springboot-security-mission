@@ -4,23 +4,41 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.access.AccessDecisionManager;
+import org.springframework.security.access.AccessDecisionVoter;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.expression.SecurityExpressionHandler;
+import org.springframework.security.access.vote.UnanimousBased;
+import org.springframework.security.authentication.AuthenticationTrustResolverImpl;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.FilterInvocation;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.expression.WebExpressionVoter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import javax.servlet.http.HttpServletResponse;
+import java.util.ArrayList;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
 public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 
     private final Logger log = LoggerFactory.getLogger(WebSecurityConfig.class);
+
+    public SecurityExpressionHandler<FilterInvocation> securityExpressionHandler() {
+        return new CustomWebSecurityExpressionHandler(
+                new AuthenticationTrustResolverImpl(),
+                "ROLE_"
+        );
+    }
 
     @Bean
     public AccessDeniedHandler accessDeniedHandler() {
@@ -36,6 +54,14 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
         };
     }
 
+    @Bean
+    public AccessDecisionManager accessDecisionManager() {
+        List<AccessDecisionVoter<?>> voters = new ArrayList<>();
+        voters.add(new WebExpressionVoter());
+        voters.add(new OddAdminVoter(new AntPathRequestMatcher("/admin")));
+        return new UnanimousBased(voters);
+    }
+
     @Override
     public void configure(WebSecurity web) {
         web.ignoring().antMatchers("/assets/**");
@@ -46,8 +72,9 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
         http
                 .authorizeRequests()
                 .antMatchers("/me").hasAnyRole("USER", "ADMIN")
-                .antMatchers("/admin").access("hasRole('ADMIN') and isFullyAuthenticated()")
+                .antMatchers("/admin").access("isFullyAuthenticated() and hasRole('ADMIN')")
                 .anyRequest().permitAll()
+                .accessDecisionManager(accessDecisionManager())
                 .and()
                 .formLogin()
                 .defaultSuccessUrl("/me")
@@ -72,6 +99,17 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .anyRequest().requiresSecure()
                 .and()
                 /**
+                 * 세션 연결 설정
+                 */
+                .sessionManagement()
+                .sessionFixation().changeSessionId()
+                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                .invalidSessionUrl("/")
+                .maximumSessions(1)
+                .maxSessionsPreventsLogin(false)
+                .and()
+                .and()
+                /**
                  * anonymous 설정
                  */
                 .anonymous()
@@ -83,6 +121,7 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                  */
                 .exceptionHandling()
                 .accessDeniedHandler(accessDeniedHandler());
+
     }
 
     @Override
@@ -90,6 +129,7 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
         auth
                 .inMemoryAuthentication()
                 .withUser("user").password("{noop}user123").roles("USER").and()
-                .withUser("admin").password("{noop}admin123").roles("ADMIN");
+                .withUser("admin01").password("{noop}admin123").roles("ADMIN").and()
+                .withUser("admin02").password("{noop}admin123").roles("ADMIN");
     }
 }
