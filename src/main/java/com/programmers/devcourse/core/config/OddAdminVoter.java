@@ -1,4 +1,4 @@
-package com.programmers.devcourse.config;
+package com.programmers.devcourse.core.config;
 
 import org.springframework.security.access.AccessDecisionVoter;
 import org.springframework.security.access.ConfigAttribute;

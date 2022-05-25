@@ -1,4 +1,4 @@
-package com.programmers.devcourse.config;
+package com.programmers.devcourse.core.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;

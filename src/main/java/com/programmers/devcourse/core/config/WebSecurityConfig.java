@@ -1,7 +1,9 @@
-package com.programmers.devcourse.config;
+package com.programmers.devcourse.core.config;
 
+import com.programmers.devcourse.application.user.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +23,10 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
 import org.springframework.security.web.FilterInvocation;
 import org.springframework.security.web.access.AccessDeniedHandler;
@@ -28,6 +34,7 @@ import org.springframework.security.web.access.expression.WebExpressionVoter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 import javax.servlet.http.HttpServletResponse;
+import javax.sql.DataSource;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,28 +42,23 @@ import java.util.List;
 @EnableWebSecurity
 public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 
-    private final Logger log = LoggerFactory.getLogger(WebSecurityConfig.class);
+    private final Logger log = LoggerFactory.getLogger(getClass());
 
-    public SecurityExpressionHandler<FilterInvocation> securityExpressionHandler() {
-        return new CustomWebSecurityExpressionHandler(
-                new AuthenticationTrustResolverImpl(),
-                "ROLE_"
-        );
+    private UserService userService;
+
+    @Autowired
+    public void setUserService(UserService userService) {
+        this.userService = userService;
     }
 
-    @Bean
-    @Qualifier("myAsyncTaskExecutor")
-    public ThreadPoolTaskExecutor threadPoolTaskExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(3);
-        executor.setMaxPoolSize(5);
-        executor.setThreadNamePrefix("my-executor-");
-        return executor;
+    @Override
+    public void configure(WebSecurity web) {
+        web.ignoring().antMatchers("/assets/**", "/h2-console/**");
     }
 
-    @Bean
-    public DelegatingSecurityContextAsyncTaskExecutor taskExecutor(@Qualifier("myAsyncTaskExecutor") AsyncTaskExecutor delegate) {
-        return new DelegatingSecurityContextAsyncTaskExecutor(delegate);
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(userService);
     }
 
     @Bean
@@ -66,24 +68,16 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
             Object principal = authentication != null ? authentication.getPrincipal() : null;
             log.warn("{} is denied", principal, e);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            response.setContentType("text/plain");
-            response.getWriter().write("## ACCESS DENIED ##");
+            response.setContentType("text/plain;charset=UTF-8");
+            response.getWriter().write("ACCESS DENIED");
             response.getWriter().flush();
             response.getWriter().close();
         };
     }
 
     @Bean
-    public AccessDecisionManager accessDecisionManager() {
-        List<AccessDecisionVoter<?>> voters = new ArrayList<>();
-        voters.add(new WebExpressionVoter());
-        voters.add(new OddAdminVoter(new AntPathRequestMatcher("/admin")));
-        return new UnanimousBased(voters);
-    }
-
-    @Override
-    public void configure(WebSecurity web) {
-        web.ignoring().antMatchers("/assets/**", "/h2-console/**");
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
     }
 
     @Override
@@ -93,64 +87,44 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/me").hasAnyRole("USER", "ADMIN")
                 .antMatchers("/admin").access("isFullyAuthenticated() and hasRole('ADMIN')")
                 .anyRequest().permitAll()
-                .accessDecisionManager(accessDecisionManager())
                 .and()
                 .formLogin()
                 .defaultSuccessUrl("/me")
                 .permitAll()
                 .and()
+                /**
+                 * Basic Authentication 설정
+                 */
                 .httpBasic()
                 .and()
                 /**
-                 * rememberMe 설정
+                 * remember me 설정
                  */
                 .rememberMe()
+                .rememberMeParameter("remember-me")
                 .tokenValiditySeconds(300)
                 .and()
                 /**
                  * 로그아웃 설정
                  */
                 .logout()
+                .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
                 .logoutSuccessUrl("/")
+                .invalidateHttpSession(true)
+                .clearAuthentication(true)
                 .and()
                 /**
-                 * HTTP -> HTTPS 요청으로 리다이렉트
+                 * HTTP 요청을 HTTPS 요청으로 리다이렉트
                  */
                 .requiresChannel()
                 .anyRequest().requiresSecure()
                 .and()
                 /**
-                 * 세션 연결 설정
-                 */
-                .sessionManagement()
-                .sessionFixation().changeSessionId()
-                .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-                .invalidSessionUrl("/")
-                .maximumSessions(1)
-                .maxSessionsPreventsLogin(false)
-                .and()
-                .and()
-                /**
-                 * anonymous 설정
-                 */
-                .anonymous()
-                .principal("thisIsAnonymousUser")
-                .authorities("ROLE_ANONYMOUS", "ROLE_UNKNOWN")
-                .and()
-                /**
-                 * 커스텀 에러 핸들링
+                 * 예외처리 핸들러
                  */
                 .exceptionHandling()
-                .accessDeniedHandler(accessDeniedHandler());
-
+                .accessDeniedHandler(accessDeniedHandler())
+        ;
     }
 
-    @Override
-    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-        auth
-                .inMemoryAuthentication()
-                .withUser("user").password("{noop}user123").roles("USER").and()
-                .withUser("admin01").password("{noop}admin123").roles("ADMIN").and()
-                .withUser("admin02").password("{noop}admin123").roles("ADMIN");
-    }
 }

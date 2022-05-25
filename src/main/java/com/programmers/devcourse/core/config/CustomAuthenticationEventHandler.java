@@ -1,4 +1,4 @@
-package com.programmers.devcourse.config;
+package com.programmers.devcourse.core.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
