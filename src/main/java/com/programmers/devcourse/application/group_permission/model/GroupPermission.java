@@ -19,7 +19,7 @@ public class GroupPermission {
     @JoinColumn(name = "group_id")
     private Group group;
 
-    @ManyToOne
+    @ManyToOne(optional = false)
     @JoinColumn(name = "permission_id")
     private Permission permission;
 
@@ -33,14 +33,5 @@ public class GroupPermission {
 
     public Permission getPermission() {
         return permission;
-    }
-
-    @Override
-    public String toString() {
-        return new ToStringBuilder(this, ToStringStyle.SHORT_PREFIX_STYLE)
-                .append("id", id)
-                .append("group", group)
-                .append("permission", permission)
-                .toString();
     }
 }

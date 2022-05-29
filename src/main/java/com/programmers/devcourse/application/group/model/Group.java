@@ -15,6 +15,7 @@ import static java.util.stream.Collectors.toList;
 @Entity
 @Table(name = "groups")
 public class Group {
+
     @Id
     @Column(name = "id")
     private Long id;

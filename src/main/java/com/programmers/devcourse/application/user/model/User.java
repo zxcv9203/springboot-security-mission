@@ -3,6 +3,7 @@ package com.programmers.devcourse.application.user.model;
 import com.programmers.devcourse.application.group.model.Group;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import javax.persistence.*;
 
@@ -24,6 +25,11 @@ public class User {
     @JoinColumn(name = "group_id")
     private Group group;
 
+    public void checkPassword(PasswordEncoder passwordEncoder, String credentials) {
+        if (passwordEncoder.matches(credentials, passwd)) {
+            throw new IllegalArgumentException("Bad credentials");
+        }
+    }
     public Long getId() {
         return id;
     }
@@ -46,7 +52,7 @@ public class User {
                 .append("id", id)
                 .append("loginId", loginId)
                 .append("passwd", passwd)
-                .append("group", group)
                 .toString();
     }
+
 }
