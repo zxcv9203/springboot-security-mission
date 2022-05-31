@@ -1,4 +1,6 @@
 spring:
+  main:
+    allow-circular-references: true
   application:
     name: spring security 08
   messages:
@@ -11,7 +13,7 @@ spring:
       path: /h2-console
   datasource:
     driver-class-name: org.h2.Driver
-    url: "jdbc:h2:mem:spring_security.db;MODE=MYSQL;DB_CLOSE_DELAY=1"
+    url: "jdbc:h2:mem:spring_security.db;MODE=MYSQL;DB_CLOSE_DELAY=-1"
     username: sa
     password:
     hikari:
@@ -21,9 +23,27 @@ spring:
   sql:
     init:
       platform: h2
-      schema-locations: classpath:sql/schema-new.sql
+      schema-locations: classpath:sql/schema-new.sql, classpath:org/springframework/security/oauth2/client/oauth2-client-schema.sql
       data-locations: classpath:sql/data-new.sql
       encoding: UTF-8
+  security:
+    oauth2:
+      client:
+        registration:
+          kakao:
+            client-name: kakao
+            client-id: b7e75a5bf48cf7d37ab309638a1e5024
+            client-secret: TA00g5YkhLX4hF2MtbpTqS9GwWQX87zU
+            scope: profile_nickname, profile_image
+            redirect-uri: "http://localhost:8080/login/oauth2/code/{registrationId}"
+            authorization-grant-type: authorization_code
+            client-authentication-method: POST
+        provider:
+          kakao:
+            authorization-uri: https://kauth.kakao.com/oauth/authorize
+            token-uri: https://kauth.kakao.com/oauth/token
+            user-info-uri: https://kapi.kakao.com/v2/user/me
+            user-name-attribute: id
   jpa:
     database: h2
     open-in-view: false

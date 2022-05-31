@@ -3,13 +3,13 @@ package com.programmers.devcourse.core.config;
 import com.programmers.devcourse.application.user.service.UserService;
 import com.programmers.devcourse.core.jwt.Jwt;
 import com.programmers.devcourse.core.jwt.JwtAuthenticationFilter;
-import com.programmers.devcourse.core.jwt.JwtAuthenticationProvider;
-import com.programmers.devcourse.core.jwt.JwtSecurityContextRepository;
+import com.programmers.devcourse.core.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
+import com.programmers.devcourse.core.oauth2.OAuth2AuthenticationSuccessHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.builders.WebSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -17,11 +17,15 @@ import org.springframework.security.config.annotation.web.configuration.WebSecur
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.client.JdbcOAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.AuthenticatedPrincipalOAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.context.SecurityContextPersistenceFilter;
-import org.springframework.security.web.context.SecurityContextRepository;
 
 import javax.servlet.http.HttpServletResponse;
 
@@ -37,15 +41,6 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
         this.jwtConfigure = jwtConfigure;
     }
 
-    public JwtAuthenticationFilter jwtAuthenticationFilter() {
-        Jwt jwt = getApplicationContext().getBean(Jwt.class);
-        return new JwtAuthenticationFilter(jwtConfigure.getHeader(), jwt);
-    }
-
-    public SecurityContextRepository securityContextRepository() {
-        Jwt jwt = getApplicationContext().getBean(Jwt.class);
-        return new JwtSecurityContextRepository(jwtConfigure.getHeader(), jwt);
-    }
     @Override
     public void configure(WebSecurity web) {
         web.ignoring().antMatchers("/assets/**", "/h2-console/**");
@@ -66,11 +61,6 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
-    @Bean
     public Jwt jwt() {
         return new Jwt(
                 jwtConfigure.getIssuer(),
@@ -79,15 +69,32 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
         );
     }
 
-    @Bean
-    public JwtAuthenticationProvider jwtAuthenticationProvider(Jwt jwt, UserService userService) {
-        return new JwtAuthenticationProvider(jwt, userService);
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        Jwt jwt = getApplicationContext().getBean(Jwt.class);
+        return new JwtAuthenticationFilter(jwtConfigure.getHeader(), jwt);
     }
 
     @Bean
-    @Override
-    public AuthenticationManager authenticationManagerBean() throws Exception {
-        return super.authenticationManagerBean();
+    public AuthorizationRequestRepository<OAuth2AuthorizationRequest> authorizationRequestRepository() {
+        return new HttpCookieOAuth2AuthorizationRequestRepository();
+    }
+
+    @Bean
+    public OAuth2AuthorizedClientService authorizedClientService(
+            JdbcOperations jdbcOperations,
+            ClientRegistrationRepository clientRegistrationRepository
+    ) {
+        return new JdbcOAuth2AuthorizedClientService(jdbcOperations, clientRegistrationRepository);
+    }
+
+    @Bean
+    public OAuth2AuthorizedClientRepository authorizedClientRepository(OAuth2AuthorizedClientService authorizedClientService) {
+        return new AuthenticatedPrincipalOAuth2AuthorizedClientRepository(authorizedClientService);
+    }
+
+    @Bean
+    public OAuth2AuthenticationSuccessHandler oauth2AuthenticationSuccessHandler(Jwt jwt, UserService userService) {
+        return new OAuth2AuthenticationSuccessHandler(jwt, userService);
     }
 
     @Override
@@ -119,17 +126,26 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and()
                 /**
+                 * OAuth2 설정
+                 */
+                .oauth2Login()
+                .authorizationEndpoint()
+                .authorizationRequestRepository(authorizationRequestRepository())
+                .and()
+                .successHandler(getApplicationContext().getBean(OAuth2AuthenticationSuccessHandler.class))
+                .authorizedClientRepository(getApplicationContext().getBean(AuthenticatedPrincipalOAuth2AuthorizedClientRepository.class))
+                .and()
+                /**
                  * 예외처리 핸들러
                  */
                 .exceptionHandling()
                 .accessDeniedHandler(accessDeniedHandler())
                 .and()
-                .securityContext()
-                .securityContextRepository(securityContextRepository())
-                .and()
+                /**
+                 * Jwt 필터
+                 */
                 .addFilterAfter(jwtAuthenticationFilter(), SecurityContextPersistenceFilter.class)
         ;
     }
-
 
 }
